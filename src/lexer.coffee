@@ -408,6 +408,8 @@ exports.Lexer = class Lexer
     if value is ';'
       @seenFor = no
       tag = 'TERMINATOR'
+    else if value is '=<'
+      tag = 'BACKCALL'
     else if value in MATH            then tag = 'MATH'
     else if value in COMPARE         then tag = 'COMPARE'
     else if value in COMPOUND_ASSIGN then tag = 'COMPOUND_ASSIGN'
@@ -771,6 +773,7 @@ HEREDOC    = /// ^ ("""|''') ([\s\S]*?) (?:\n[^\n\S]*)? \1 ///
 
 OPERATOR   = /// ^ (
   ?: [-=]>             # function
+   | =<                # backcall
    | [-+*/%<>&|^!?=]=  # compound assign / compare
    | >>>=?             # zero-fill right shift
    | ([-+:])\1         # doubles

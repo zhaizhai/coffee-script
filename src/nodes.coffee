@@ -1355,6 +1355,29 @@ exports.Code = class Code extends Base
   traverseChildren: (crossScope, func) ->
     super(crossScope, func) if crossScope
 
+
+exports.BackCall = class BackCall extends Base
+  # cb_array is an array of identifiers
+  constructor: (invok, cb_array, body = null) ->
+    tag = 'func'
+
+    # TODO: this is a temporary hack to get the params; we will need
+    # to change the grammar to better understand the notation
+    # preceding the backcall
+    params = ((new Param x.unwrap()) for x in cb_array.objects)
+    @cont = new Code params, body, tag
+
+    if invok.soak
+      throwSyntaxError "Can't soak backcall", @locationData
+    invok.args.push @cont
+    @call = invok
+
+  # children: ['call', 'cont']
+
+  compileNode: (o) ->
+    return @call.compileNode o
+
+
 #### Param
 
 # A parameter in a function definition. Beyond a typical Javascript parameter,

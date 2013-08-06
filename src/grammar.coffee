@@ -76,11 +76,20 @@ grammar =
     o 'Body'
   ]
 
-  # Any list of statements and expressions, separated by line breaks or semicolons.
+  # A list of statements and expressions separated by line breaks or semicolons.
+  PlainBody: [
+    o 'Line',                                   -> [$1]
+    o 'PlainBody TERMINATOR Line',              -> ($1.push $3; $1)
+  ]
+
+  # A list of statements and expressions, separated by line breaks or semicolons,
+  # possibly with a backcall at the end.
   Body: [
-    o 'Line',                                   -> Block.wrap [$1]
-    o 'Body TERMINATOR Line',                   -> $1.push $3
-    o 'Body TERMINATOR'
+    o 'BackCall',                               -> Block.wrap [$1]
+    o 'PlainBody',                              -> Block.wrap $1
+    o 'PlainBody TERMINATOR BackCall',          -> Block.wrap ($1.concat [$3])
+    o 'PlainBody TERMINATOR',                   -> Block.wrap $1
+    # TODO: might need to handle multiple terminator?
   ]
 
   # Block and statements, which make up a line in a body.
@@ -307,19 +316,33 @@ grammar =
     o 'CLASS SimpleAssignable EXTENDS Expression Block', -> new Class $2, $4, $5
   ]
 
-  # Ordinary function invocation, or a chained series of calls.
-  Invocation: [
-    o 'Value OptFuncExist Arguments',           -> new Call $1, $3, $2
-    o 'Invocation OptFuncExist Arguments',      -> new Call $1, $3, $2
+  BackCall: [
+    # TODO: hack to pass Call object like this
+    o 'Array BACKCALL InvocationNoSoak TERMINATOR Body', -> new BackCall $3, $1, $5
+    o 'Array BACKCALL InvocationNoSoak TERMINATOR',      -> new BackCall $3, $1
+  ]
+
+  # Ordinary function invocation, or a chained series of calls, with no soaking allowed.
+  # TODO: maybe don't return a Call object
+  InvocationNoSoak: [
+    o 'Value Arguments',           -> new Call $1, $2
+    o 'Invocation Arguments',      -> new Call $1, $2
     o 'SUPER',                                  -> new Call 'super', [new Splat new Literal 'arguments']
     o 'SUPER Arguments',                        -> new Call 'super', $2
   ]
 
-  # An optional existence check on a function.
-  OptFuncExist: [
-    o '',                                       -> no
-    o 'FUNC_EXIST',                             -> yes
+  # Ordinary function invocation, or a chained series of calls.
+  Invocation: [
+    o 'InvocationNoSoak'
+    o 'Value FUNC_EXIST Arguments',           -> new Call $1, $3, yes
+    o 'Invocation FUNC_EXIST Arguments',      -> new Call $1, $3, yes
   ]
+
+  # # An optional existence check on a function.
+  # OptFuncExist: [
+  #   o '',                                       -> no
+  #   o 'FUNC_EXIST',                             -> yes
+  # ]
 
   # The list of arguments to a function call.
   Arguments: [
@@ -589,6 +612,7 @@ operators = [
   ['left',      'COMPARE']
   ['left',      'LOGIC']
   ['nonassoc',  'INDENT', 'OUTDENT']
+  ['nonassoc',  'BACKCALL'] # TODO: where should this precedence be?
   ['right',     '=', ':', 'COMPOUND_ASSIGN', 'RETURN', 'THROW', 'EXTENDS']
   ['right',     'FORIN', 'FOROF', 'BY', 'WHEN']
   ['right',     'IF', 'ELSE', 'FOR', 'WHILE', 'UNTIL', 'LOOP', 'SUPER', 'CLASS']
