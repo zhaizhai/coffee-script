@@ -203,6 +203,7 @@ grammar =
   FuncGlyph: [
     o '->',                                     -> 'func'
     o '=>',                                     -> 'boundfunc'
+    o '~>',                                     -> 'async'
   ]
 
   # An optional, trailing comma.

@@ -208,10 +208,16 @@ exports.Base = class Base
 # indented block of code -- the implementation of a function, a clause in an
 # `if`, `switch`, or `try`, and so on...
 exports.Block = class Block extends Base
-  constructor: (nodes) ->
+  constructor: (nodes, tag) ->
     @expressions = compact flatten nodes or []
+    @async       = tag is 'async'
 
   children: ['expressions']
+
+  # Set Block to be async
+  setAsync: ->
+    @async = true
+    this
 
   # Tack an expression on to the end of this expression list.
   push: (node) ->
@@ -249,13 +255,29 @@ exports.Block = class Block extends Base
   # ensures that the final expression is returned.
   makeReturn: (res) ->
     len = @expressions.length
+    expr = null
     while len--
       expr = @expressions[len]
       if expr not instanceof Comment
         @expressions[len] = expr.makeReturn res
-        @expressions.splice(len, 1) if expr instanceof Return and not expr.expression
         break
-    this
+    emptyReturn = expr instanceof Return and not expr.expression
+
+    if not @async
+      @expressions.splice(len, 1) if emptyReturn
+      return this
+
+    # TODO: o.scope.freeVariable 'cb'
+    if len < 0
+      call = new Return (new Call (new Literal '__cb'), [])
+      @expressions.push call
+    else if emptyReturn
+      call = new Return (new Call (new Literal '__cb'), [])
+      @expressions[len] = call
+    else
+      call = new Return (new Call (new Literal '__cb'), [expr.expression])
+      @expressions[len] = call
+    return this
 
   # A **Block** is the only node that can serve as the root.
   compileToFragments: (o = {}, level) ->
@@ -351,7 +373,7 @@ exports.Block = class Block extends Base
           fragments.push @makeCode scope.declaredVariables().join(', ')
         if assigns
           fragments.push @makeCode ",\n#{@tab + TAB}" if declars
-          fragments.push @makeCode scope.assignedVariables().join(",\n#{@tab + TAB}")
+          fragments.push @makeCode scope.assignedVariables().join(",\n#{@tab + TAfragmentB}")
         fragments.push @makeCode ";\n#{if @spaced then '\n' else ''}"
       else if fragments.length and post.length
         fragments.push @makeCode "\n"
@@ -359,9 +381,9 @@ exports.Block = class Block extends Base
 
   # Wrap up the given nodes as a **Block**, unless it already happens
   # to be one.
-  @wrap: (nodes) ->
+  @wrap: (nodes, tag = '') ->
     return nodes[0] if nodes.length is 1 and nodes[0] instanceof Block
-    new Block nodes
+    new Block nodes, tag
 
 #### Literal
 
@@ -424,8 +446,9 @@ class exports.Bool extends Base
 # A `return` is a *pureStatement* -- wrapping it in a closure wouldn't
 # make sense.
 exports.Return = class Return extends Base
-  constructor: (expr) ->
+  constructor: (expr, tag = '') ->
     @expression = expr if expr and not expr.unwrap().isUndefined
+    @async = tag is 'async'
 
   children: ['expression']
 
@@ -440,7 +463,9 @@ exports.Return = class Return extends Base
   compileNode: (o) ->
     answer = []
     # TODO: If we call expression.compile() here twice, we'll sometimes get back different results!
-    answer.push @makeCode @tab + "return#{if @expression then " " else ""}"
+    answer.push @makeCode @tab + "return#{if @expression or @async then " " else ""}"
+    if @async
+      answer = answer.concat '__cb'
     if @expression
       answer = answer.concat @expression.compileToFragments o, LEVEL_PAREN
     answer.push @makeCode ";"
@@ -1275,6 +1300,9 @@ exports.Code = class Code extends Base
     @body    = body or new Block
     @bound   = tag is 'boundfunc'
     @context = '_this' if @bound
+    @async   = tag is 'async'
+    @params.push (new Param (new Literal "__cb")) if @async
+    @body.setAsync() if @async
 
   children: ['params', 'body']
 
@@ -1364,7 +1392,6 @@ exports.BackCall = class BackCall extends Base
     # TODO: is there a better way to do this?
     params = ((new Param x.unwrap()) for x in cb_array)
     @cont = new Code params, body, tag
-
     if invok.soak
       throwSyntaxError "Can't soak backcall", @locationData
 
