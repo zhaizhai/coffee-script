@@ -322,20 +322,30 @@ grammar =
   ]
 
   BackCall: [
-    # TODO: hack to pass Call object like this
-    o 'Assignable BACKCALL InvocationNoSoak TERMINATOR Body', -> new BackCall $3, [$1], $5
-    o 'Assignable BACKCALL InvocationNoSoak TERMINATOR',      -> new BackCall $3, [$1]
+    # The 'BACKCALL InvocationNoSoak' rule is to deal with the case
+    # where the invocation ends with an OUTDENT
+    #
+    # TODO: it's a bit of a hack to pass Call object like this
+    # TODO: it would be nice to not have to repeat so much code
+    # TODO: are there any bad cases involving
+    #
+    # BACKCALL InvocationNoSoak [nonterminator]?
+    o 'Assignable BACKCALL InvocationNoSoak TERMINATOR Body',      -> new BackCall $3, [$1], $5
+    o 'Assignable BACKCALL InvocationNoSoak TERMINATOR',           -> new BackCall $3, [$1]
+    o 'Assignable BACKCALL InvocationNoSoak',                      -> new BackCall $3, [$1]
     o 'MultiAssignable BACKCALL InvocationNoSoak TERMINATOR Body', -> new BackCall $3, $1, $5
     o 'MultiAssignable BACKCALL InvocationNoSoak TERMINATOR',      -> new BackCall $3, $1
-    o 'BACKCALL InvocationNoSoak TERMINATOR Body', -> new BackCall $2, [], $4
-    o 'BACKCALL InvocationNoSoak TERMINATOR',      -> new BackCall $2, []
+    o 'MultiAssignable BACKCALL InvocationNoSoak',                 -> new BackCall $3, $1
+    o 'BACKCALL InvocationNoSoak TERMINATOR Body',                 -> new BackCall $2, [], $4
+    o 'BACKCALL InvocationNoSoak TERMINATOR',                      -> new BackCall $2, []
+    o 'BACKCALL InvocationNoSoak',                                 -> new BackCall $2, []
   ]
 
   # Ordinary function invocation, or a chained series of calls, with no soaking allowed.
   # TODO: maybe don't return a Call object
   InvocationNoSoak: [
-    o 'Value Arguments',           -> new Call $1, $2
-    o 'Invocation Arguments',      -> new Call $1, $2
+    o 'Value Arguments',                        -> new Call $1, $2
+    o 'InvocationNoSoak Arguments',             -> new Call $1, $2
     o 'SUPER',                                  -> new Call 'super', [new Splat new Literal 'arguments']
     o 'SUPER Arguments',                        -> new Call 'super', $2
   ]
@@ -343,8 +353,8 @@ grammar =
   # Ordinary function invocation, or a chained series of calls.
   Invocation: [
     o 'InvocationNoSoak'
-    o 'Value FUNC_EXIST Arguments',           -> new Call $1, $3, yes
-    o 'Invocation FUNC_EXIST Arguments',      -> new Call $1, $3, yes
+    o 'Value FUNC_EXIST Arguments',                 -> new Call $1, $3, yes
+    o 'InvocationNoSoak FUNC_EXIST Arguments',      -> new Call $1, $3, yes
   ]
 
   # # An optional existence check on a function.
@@ -406,7 +416,7 @@ grammar =
     o 'ArgList OptComma INDENT ArgList OptComma OUTDENT', -> $1.concat $4
   ]
 
-  # Valid arguments are Blocks or Splats.
+  # Valid arguments are Expressions or Splats.
   Arg: [
     o 'Expression'
     o 'Splat'

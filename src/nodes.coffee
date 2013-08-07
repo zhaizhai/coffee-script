@@ -1367,6 +1367,9 @@ exports.BackCall = class BackCall extends Base
 
     if invok.soak
       throwSyntaxError "Can't soak backcall", @locationData
+
+    # TODO: if invok takes an optional callback, we can eliminate this
+    # step if body is empty
     invok.args.push @cont
     @call = invok
 
