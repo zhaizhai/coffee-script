@@ -327,6 +327,8 @@ grammar =
     o 'Assignable BACKCALL InvocationNoSoak TERMINATOR',      -> new BackCall $3, [$1]
     o 'MultiAssignable BACKCALL InvocationNoSoak TERMINATOR Body', -> new BackCall $3, $1, $5
     o 'MultiAssignable BACKCALL InvocationNoSoak TERMINATOR',      -> new BackCall $3, $1
+    o 'BACKCALL InvocationNoSoak TERMINATOR Body', -> new BackCall $2, [], $4
+    o 'BACKCALL InvocationNoSoak TERMINATOR',      -> new BackCall $2, []
   ]
 
   # Ordinary function invocation, or a chained series of calls, with no soaking allowed.
