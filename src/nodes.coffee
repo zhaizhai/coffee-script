@@ -1357,14 +1357,12 @@ exports.Code = class Code extends Base
 
 
 exports.BackCall = class BackCall extends Base
-  # cb_array is an array of identifiers
+  # cb_array is an array of Assignables
   constructor: (invok, cb_array, body = null) ->
     tag = 'func'
-
-    # TODO: this is a temporary hack to get the params; we will need
-    # to change the grammar to better understand the notation
-    # preceding the backcall
-    params = ((new Param x.unwrap()) for x in cb_array.objects)
+    # extract the identifiers
+    # TODO: is there a better way to do this?
+    params = ((new Param x.unwrap()) for x in cb_array)
     @cont = new Code params, body, tag
 
     if invok.soak

@@ -256,6 +256,11 @@ grammar =
     o 'Object',                                 -> new Value $1
   ]
 
+  MultiAssignable: [
+    o 'Assignable , Assignable',                -> [$1, $3]
+    o 'MultiAssignable , Assignable',           -> $1.concat [$3]
+  ]
+
   # The types of things that can be treated as values -- assigned to, invoked
   # as functions, indexed into, named as a class, etc.
   Value: [
@@ -318,8 +323,10 @@ grammar =
 
   BackCall: [
     # TODO: hack to pass Call object like this
-    o 'Array BACKCALL InvocationNoSoak TERMINATOR Body', -> new BackCall $3, $1, $5
-    o 'Array BACKCALL InvocationNoSoak TERMINATOR',      -> new BackCall $3, $1
+    o 'Assignable BACKCALL InvocationNoSoak TERMINATOR Body', -> new BackCall $3, [$1], $5
+    o 'Assignable BACKCALL InvocationNoSoak TERMINATOR',      -> new BackCall $3, [$1]
+    o 'MultiAssignable BACKCALL InvocationNoSoak TERMINATOR Body', -> new BackCall $3, $1, $5
+    o 'MultiAssignable BACKCALL InvocationNoSoak TERMINATOR',      -> new BackCall $3, $1
   ]
 
   # Ordinary function invocation, or a chained series of calls, with no soaking allowed.
