@@ -44,3 +44,6 @@ test "Basic placeholders", ->
     cb (a + b)
   sum =< f 3, *, 5
   eq sum, 8
+
+  throws -> CoffeeScript.compile "x =< f *, *"
+  throws -> CoffeeScript.compile "x =< f *"
