@@ -210,7 +210,16 @@ exports.Base = class Base
 exports.Block = class Block extends Base
   constructor: (nodes, tag) ->
     @expressions = compact flatten nodes or []
+    # TODO: probably put this in the o variable later
     @async       = tag is 'async'
+
+    # TODO: should we allow returns inside async functions?
+    # if @async
+    #   returnNode = @contains (child) ->
+    #     child instanceof Return
+    #   if returnNode
+    #     # TODO: use returnNode's locationData?
+    #     throwSyntaxError "Can't return inside async function!", @locationData
 
   children: ['expressions']
 
@@ -254,29 +263,21 @@ exports.Block = class Block extends Base
   # A Block node does not return its entire body, rather it
   # ensures that the final expression is returned.
   makeReturn: (res) ->
-    len = @expressions.length
-    expr = null
-    while len--
-      expr = @expressions[len]
-      if expr not instanceof Comment
-        @expressions[len] = expr.makeReturn res
-        break
-    emptyReturn = expr instanceof Return and not expr.expression
+    len = @expressions.length - 1
+    while len >= 0 and (@expressions[len] instanceof Comment)
+      len--
+
+    expr = if len >= 0 then @expressions[len] else null
 
     if not @async
-      @expressions.splice(len, 1) if emptyReturn
+      if len >= 0
+        @expressions[len] = expr.makeReturn res
+        emptyReturn = expr instanceof Return and not expr.expression
+        @expressions.splice(len, 1) if emptyReturn
       return this
 
-    # TODO: o.scope.freeVariable 'cb'
-    if len < 0
-      call = new Return (new Call (new Literal '__cb'), [])
-      @expressions.push call
-    else if emptyReturn
-      call = new Return (new Call (new Literal '__cb'), [])
-      @expressions[len] = call
-    else
-      call = new Return (new Call (new Literal '__cb'), [expr.expression])
-      @expressions[len] = call
+    if len < 0 or expr not instanceof Callback
+      @expressions.push (new Callback [])
     return this
 
   # A **Block** is the only node that can serve as the root.
@@ -373,7 +374,7 @@ exports.Block = class Block extends Base
           fragments.push @makeCode scope.declaredVariables().join(', ')
         if assigns
           fragments.push @makeCode ",\n#{@tab + TAB}" if declars
-          fragments.push @makeCode scope.assignedVariables().join(",\n#{@tab + TAfragmentB}")
+          fragments.push @makeCode scope.assignedVariables().join(",\n#{@tab + TAB}")
         fragments.push @makeCode ";\n#{if @spaced then '\n' else ''}"
       else if fragments.length and post.length
         fragments.push @makeCode "\n"
@@ -441,14 +442,42 @@ class exports.Bool extends Base
   compileNode: -> [@makeCode @val]
   constructor: (@val) ->
 
+#### Callback
+
+# Like `return`, a `callback` is a *pureStatement*.
+
+exports.Callback = class Callback extends Base
+  constructor: (@args = []) ->
+    # TODO: eventually might want to generate this dynamically instead
+    # of reserving the word __cb
+    @cbName = '__cb'
+
+  isStatement: YES
+
+  setCbName: (@cbName) ->
+    # TODO: we don't use this yet
+
+  makeReturn: (res) ->
+    # TODO: use a more helpful error message
+    throwSyntaxError "Cannot make return from callback", @locationData
+
+  compileNode: (o) ->
+    unless @cbName?
+      throwSyntaxError "Callback used outside of async context!", @locationData
+
+    cbValue = new Value (new Literal @cbName)
+    call = new Call cbValue, @args
+    call = call.makeReturn()
+    return call.compileToFragments o
+
+
 #### Return
 
 # A `return` is a *pureStatement* -- wrapping it in a closure wouldn't
 # make sense.
 exports.Return = class Return extends Base
-  constructor: (expr, tag = '') ->
+  constructor: (expr) ->
     @expression = expr if expr and not expr.unwrap().isUndefined
-    @async = tag is 'async'
 
   children: ['expression']
 
@@ -464,8 +493,6 @@ exports.Return = class Return extends Base
     answer = []
     # TODO: If we call expression.compile() here twice, we'll sometimes get back different results!
     answer.push @makeCode @tab + "return#{if @expression or @async then " " else ""}"
-    if @async
-      answer = answer.concat '__cb'
     if @expression
       answer = answer.concat @expression.compileToFragments o, LEVEL_PAREN
     answer.push @makeCode ";"
@@ -1403,7 +1430,7 @@ exports.BackCall = class BackCall extends Base
   # children: ['call', 'cont']
 
   compileNode: (o) ->
-    return @call.compileNode o
+    return @call.compileToFragments o
 
 
 #### Param
