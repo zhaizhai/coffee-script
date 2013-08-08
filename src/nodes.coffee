@@ -1356,7 +1356,7 @@ exports.Code = class Code extends Base
     super(crossScope, func) if crossScope
 
 
-exports.BackCall = class BackCall extends Base
+exports.Backcall = class Backcall extends Base
   # cb_array is an array of Assignables
   constructor: (invok, cb_array, body = null) ->
     tag = 'func'
@@ -1368,9 +1368,22 @@ exports.BackCall = class BackCall extends Base
     if invok.soak
       throwSyntaxError "Can't soak backcall", @locationData
 
+    hasPlaceholder = false
+    for arg, idx in invok.args
+      if arg instanceof Splat
+        throwSyntaxError "Splats not allowed in backcalls", @locationData
+
+      if arg instanceof Literal and arg.value is '*'
+        if hasPlaceholder
+          throwSyntaxError "Multiple placeholders in backcall", @locationData
+        hasPlaceholder = true
+        invok.args[idx] = @cont
+
     # TODO: if invok takes an optional callback, we can eliminate this
     # step if body is empty
-    invok.args.push @cont
+    unless hasPlaceholder
+      invok.args.push @cont
+
     @call = invok
 
   # children: ['call', 'cont']

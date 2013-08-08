@@ -3,9 +3,6 @@
 
 # * Backcalls
 
-# shared identity function
-id = (_) -> if arguments.length is 1 then _ else [arguments...]
-
 # TODO: we might need an async test framework to test this all
 # properly
 test "Basic backcall", ->
@@ -41,3 +38,9 @@ test "Nested backcalls", ->
       cb()
     cb()
   eq x, '0123'
+
+test "Basic placeholders", ->
+  f = (a, cb, b) ->
+    cb (a + b)
+  sum =< f 3, *, 5
+  eq sum, 8

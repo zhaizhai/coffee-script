@@ -461,7 +461,7 @@ IMPLICIT_FUNC    = ['IDENTIFIER', 'SUPER', ')', 'CALL_END', ']', 'INDEX_END', '@
 IMPLICIT_CALL    = [
   'IDENTIFIER', 'NUMBER', 'STRING', 'JS', 'REGEX', 'NEW', 'PARAM_START', 'CLASS'
   'IF', 'TRY', 'SWITCH', 'THIS', 'BOOL', 'NULL', 'UNDEFINED', 'UNARY', 'SUPER'
-  'THROW', '@', '->', '=>', '[', '(', '{', '--', '++'
+  'THROW', '@', '->', '=>', '[', '(', '{', '--', '++', 'PLACEHOLDER'
 ]
 
 IMPLICIT_UNSPACED_CALL = ['+', '-']
