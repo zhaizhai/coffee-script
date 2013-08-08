@@ -1463,12 +1463,6 @@ exports.Backcall = class Backcall extends Base
     @_prepareCall() unless @_prepared
     return @call.makeReturn res
 
-<<<<<<< HEAD
-  # toString: (idt) ->
-  #   super idt, @constructor.name + ' ' + @call + ' ' + @cont
-=======
->>>>>>> backcall
-
 #### Param
 
 # A parameter in a function definition. Beyond a typical Javascript parameter,
