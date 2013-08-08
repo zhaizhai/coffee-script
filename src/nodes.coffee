@@ -105,15 +105,9 @@ exports.Base = class Base
   # many statement nodes (e.g. If, For)...
   makeReturn: (res) ->
     me = @unwrapAll()
-#    console.log 'base;makeReturn;me:------------------------'
-#    console.log me.toString()
     if res
-#      console.log 'base;makeReturn;call:--------------- '
-#      console.log (new Call new Literal("#{res}.push"), [me]).toString()
       new Call new Literal("#{res}.push"), [me]
     else
-#      console.log 'base;makeReturn;ret:----------------'
-#      console.log (new Return me).toString()
       new Return me
 
   # Does this node, or any of its children, contain a node of a certain kind?
@@ -277,11 +271,13 @@ exports.Block = class Block extends Base
 
     if not @async
       if len >= 0
-        @expressions[len] = expr.makeReturn res
+        @expressions[len] = expr.makeReturn res unless expr instanceof Callback
         emptyReturn = expr instanceof Return and not expr.expression
         @expressions.splice(len, 1) if emptyReturn
       return this
-    if len < 0 or expr not instanceof Callback
+    if expr instanceof BackCall
+      @expressions[len] = new Return expr
+    else if len < 0 or expr not instanceof Callback
       @expressions.push (new Callback [])
     return this
 
@@ -293,8 +289,6 @@ exports.Block = class Block extends Base
   # return the result, and it's an expression, simply return it. If it's a
   # statement, ask the statement to do so.
   compileNode: (o) ->
-#    console.log 'block;compileNode---------------------------------'
-#    console.log @expressions.toString()
     @tab  = o.indent
     top   = o.level is LEVEL_TOP
     compiledNodes = []
@@ -302,8 +296,6 @@ exports.Block = class Block extends Base
     for node, index in @expressions
       node = node.unwrapAll()
       node = (node.unfoldSoak(o) or node)
-#      console.log 'block;compilenodes------------------------------------'
-#      console.log node.toString()
 
       if node instanceof Block
         # This is a nested block. We don't do anything special here like enclose
@@ -313,8 +305,6 @@ exports.Block = class Block extends Base
       else if top
         node.front = true
         fragments = node.compileToFragments o
-#        console.log 'fragments-----------------------------------'
-#        console.log fragments.toString()
         unless node.isStatement o
           fragments.unshift @makeCode "#{@tab}"
           fragments.push @makeCode ";"
@@ -367,8 +357,6 @@ exports.Block = class Block extends Base
     for exp, i in @expressions
       exp = exp.unwrap()
       break unless exp instanceof Comment or exp instanceof Literal
-#    console.log 'cwd--------------------------------'
-#    console.log @expressions.toString()
     o = merge(o, level: LEVEL_TOP)
     if i
       rest = @expressions.splice i, 9e9
@@ -483,6 +471,8 @@ exports.Callback = class Callback extends Base
     call = call.makeReturn()
     return call.compileToFragments o
 
+  toString: (idt) ->
+    super idt, @constructor.name + ' ' + @args.toString()
 
 #### Return
 
@@ -649,8 +639,6 @@ exports.Call = class Call extends Base
     this
 
   makeReturn: (o) ->
-#    console.log 'call;makeReturn----------------------------'
-#    console.log this
     return super.makeReturn o
 
   # Grab the reference to the superclass's implementation of the current
@@ -1401,9 +1389,6 @@ exports.Code = class Code extends Base
     @eachParamName (name, node) ->
       node.error "multiple parameters named '#{name}'" if name in uniqs
       uniqs.push name
-#    console.log 'code compileNodes-------------------------------'
-#    console.log @params.toString()
-#    console.log @body.toString()
     @body.makeReturn() unless wasEmpty or @noReturn
     if @bound
       if o.scope.parent.method?.bound
@@ -1456,8 +1441,6 @@ exports.BackCall = class BackCall extends Base
     return @call.compileToFragments o
 
   makeReturn: (res) ->
-#    console.log 'BackCall makeret:--------------------'
-#    console.log @call.toString()
     return @call.makeReturn res
 
   # toString: (idt) ->
