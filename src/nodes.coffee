@@ -275,7 +275,7 @@ exports.Block = class Block extends Base
         emptyReturn = expr instanceof Return and not expr.expression
         @expressions.splice(len, 1) if emptyReturn
       return this
-    if expr instanceof BackCall
+    if expr instanceof Backcall
       @expressions[len] = new Return expr
     else if len < 0 or expr not instanceof Callback
       @expressions.push (new Callback [])
@@ -496,8 +496,6 @@ exports.Return = class Return extends Base
     answer = []
     # TODO: If we call expression.compile() here twice, we'll sometimes get back different results!
     answer.push @makeCode @tab + "return#{if @expression or @async then " " else ""}"
-#    if @async
-#      answer = answer.push (@makeCode '__cb')
     if @expression
       answer = answer.concat @expression.compileToFragments o, LEVEL_PAREN
     answer.push @makeCode ";"
@@ -637,9 +635,6 @@ exports.Call = class Call extends Base
     else
       @isNew = true
     this
-
-  makeReturn: (o) ->
-    return super.makeReturn o
 
   # Grab the reference to the superclass's implementation of the current
   # method.
