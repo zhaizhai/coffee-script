@@ -20,3 +20,14 @@ test "Nested async functions", ->
   _g =< f()
   x =< _g()
   eq x, 5
+
+test "Backcall and async", ->
+  g = (x, cb) ->
+    return cb (x + 3)
+
+  f = (x) ~>
+    y =< g x
+    callback (y + 2)
+
+  z =< f 3, (x) -> x
+  eq z, 8
