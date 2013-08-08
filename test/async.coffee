@@ -32,6 +32,16 @@ test "Backcall and async", ->
   z =< f 3, (x) -> x
   eq z, 8
 
+# # TODO: we can't test this yet w/o an async framework
+# test "Async with backcall and implicit callback", ->
+#   g = (x) ~>
+
+#   f = (x) ~>
+#     =< g x
+
+#   =< f 3
+#   # TODO: test that it got here
+
 test "Nested backcalls", ->
   g = (x, cb) ->
     return cb (x + 3)
