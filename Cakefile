@@ -31,7 +31,7 @@ build = (cb) ->
 
 # Run a CoffeeScript through our node/coffee interpreter.
 run = (args, cb) ->
-  proc =         spawn 'node', ['bin/coffee'].concat(args)
+  proc =         spawn 'node', ['/usr/local/bin/coffee'].concat(args)
   proc.stderr.on 'data', (buffer) -> console.log buffer.toString()
   proc.on        'exit', (status) ->
     process.exit(1) if status != 0
@@ -184,6 +184,7 @@ runTests = (CoffeeScript) ->
         error: e
         description: description if description?
         source: fn.toString() if fn.toString?
+        fn: fn
 
   # See http://wiki.ecmascript.org/doku.php?id=harmony:egal
   egal = (a, b) ->
@@ -211,11 +212,13 @@ runTests = (CoffeeScript) ->
     return log(message, green) unless failures.length
     log "failed #{failures.length} and #{message}", red
     for fail in failures
-      {error, filename, description, source}  = fail
-      console.log ''
-      log "  #{description}", red if description
-      log "  #{error.stack}", red
-      console.log "  #{source}" if source
+      {error, filename, description, source, fn}  = fail
+      console.log "filename:  #{filename}"
+      console.log "description:  #{description}", red if description
+      console.log "error:  #{error}", red
+      console.log "stack:  #{error.stack}", red
+      console.log "source:  #{source}" if source
+      console.log "fn:  #{fn}"
     return
 
   # Run every test in the `test` folder, recording failures.
