@@ -1436,9 +1436,7 @@ exports.Backcall = class Backcall extends Base
     # extract the identifiers
     # TODO: is there a better way to do this?
     params = ((new Param x.unwrap()) for x in @cbArray)
-
-    # TODO: maybe this actually needs to be a bound func
-    cont = new Code params, @body, 'func'
+    cont = new Code params, @body, 'boundfunc'
 
     hasPlaceholder = false
     for arg, idx in @call.args
@@ -1465,8 +1463,11 @@ exports.Backcall = class Backcall extends Base
     @_prepareCall() unless @_prepared
     return @call.makeReturn res
 
+<<<<<<< HEAD
   # toString: (idt) ->
   #   super idt, @constructor.name + ' ' + @call + ' ' + @cont
+=======
+>>>>>>> backcall
 
 #### Param
 
