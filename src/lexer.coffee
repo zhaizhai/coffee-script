@@ -408,6 +408,9 @@ exports.Lexer = class Lexer
     if value is ';'
       @seenFor = no
       tag = 'TERMINATOR'
+    else if value is ','
+      if prev and prev[1] is '*'
+        prev[0] = 'PLACEHOLDER'
     else if value is '=<'
       tag = 'BACKCALL'
     else if value in MATH            then tag = 'MATH'

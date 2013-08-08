@@ -85,9 +85,9 @@ grammar =
   # A list of statements and expressions, separated by line breaks or semicolons,
   # possibly with a backcall at the end.
   Body: [
-    o 'BackCall',                               -> Block.wrap [$1]
+    o 'Backcall',                               -> Block.wrap [$1]
     o 'PlainBody',                              -> Block.wrap $1
-    o 'PlainBody TERMINATOR BackCall',          -> Block.wrap ($1.concat [$3])
+    o 'PlainBody TERMINATOR Backcall',          -> Block.wrap ($1.concat [$3])
     o 'PlainBody TERMINATOR',                   -> Block.wrap $1
     # TODO: might need to handle multiple terminator?
   ]
@@ -330,7 +330,7 @@ grammar =
     o 'CLASS SimpleAssignable EXTENDS Expression Block', -> new Class $2, $4, $5
   ]
 
-  BackCall: [
+  Backcall: [
     # The 'BACKCALL InvocationNoSoak' rule is to deal with the case
     # where the invocation ends with an OUTDENT
     #
@@ -339,15 +339,15 @@ grammar =
     # TODO: are there any bad cases involving
     #
     # BACKCALL InvocationNoSoak [nonterminator]?
-    o 'Assignable BACKCALL InvocationNoSoak TERMINATOR Body',      -> new BackCall $3, [$1], $5
-    o 'Assignable BACKCALL InvocationNoSoak TERMINATOR',           -> new BackCall $3, [$1]
-    o 'Assignable BACKCALL InvocationNoSoak',                      -> new BackCall $3, [$1]
-    o 'MultiAssignable BACKCALL InvocationNoSoak TERMINATOR Body', -> new BackCall $3, $1, $5
-    o 'MultiAssignable BACKCALL InvocationNoSoak TERMINATOR',      -> new BackCall $3, $1
-    o 'MultiAssignable BACKCALL InvocationNoSoak',                 -> new BackCall $3, $1
-    o 'BACKCALL InvocationNoSoak TERMINATOR Body',                 -> new BackCall $2, [], $4
-    o 'BACKCALL InvocationNoSoak TERMINATOR',                      -> new BackCall $2, []
-    o 'BACKCALL InvocationNoSoak',                                 -> new BackCall $2, []
+    o 'Assignable BACKCALL InvocationNoSoak TERMINATOR Body',      -> new Backcall $3, [$1], $5
+    o 'Assignable BACKCALL InvocationNoSoak TERMINATOR',           -> new Backcall $3, [$1]
+    o 'Assignable BACKCALL InvocationNoSoak',                      -> new Backcall $3, [$1]
+    o 'MultiAssignable BACKCALL InvocationNoSoak TERMINATOR Body', -> new Backcall $3, $1, $5
+    o 'MultiAssignable BACKCALL InvocationNoSoak TERMINATOR',      -> new Backcall $3, $1
+    o 'MultiAssignable BACKCALL InvocationNoSoak',                 -> new Backcall $3, $1
+    o 'BACKCALL InvocationNoSoak TERMINATOR Body',                 -> new Backcall $2, [], $4
+    o 'BACKCALL InvocationNoSoak TERMINATOR',                      -> new Backcall $2, []
+    o 'BACKCALL InvocationNoSoak',                                 -> new Backcall $2, []
   ]
 
   # Ordinary function invocation, or a chained series of calls, with no soaking allowed.
@@ -429,6 +429,7 @@ grammar =
   Arg: [
     o 'Expression'
     o 'Splat'
+    o 'PLACEHOLDER',     -> new Literal '*'
   ]
 
   # Just simple, comma-separated, required arguments (no fancy syntax). We need
