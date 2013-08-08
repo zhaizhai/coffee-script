@@ -1357,19 +1357,22 @@ exports.Code = class Code extends Base
 
 
 exports.Backcall = class Backcall extends Base
-  # cb_array is an array of Assignables
-  constructor: (invok, cb_array, body = null) ->
-    tag = 'func'
-    # extract the identifiers
-    # TODO: is there a better way to do this?
-    params = ((new Param x.unwrap()) for x in cb_array)
-    @cont = new Code params, body, tag
-
-    if invok.soak
+  # cbArray is an array of Assignables
+  constructor: (@call, @cbArray, @body = new Block) ->
+    @_prepared = false
+    if @call.soak
       throwSyntaxError "Can't soak backcall", @locationData
 
+  children: ['call']
+
+  _prepareCall: ->
+    # extract the identifiers
+    # TODO: is there a better way to do this?
+    params = ((new Param x.unwrap()) for x in @cbArray)
+    cont = new Code params, @body, 'boundfunc'
+
     hasPlaceholder = false
-    for arg, idx in invok.args
+    for arg, idx in @call.args
       if arg instanceof Splat
         throwSyntaxError "Splats not allowed in backcalls", @locationData
 
@@ -1377,19 +1380,21 @@ exports.Backcall = class Backcall extends Base
         if hasPlaceholder
           throwSyntaxError "Multiple placeholders in backcall", @locationData
         hasPlaceholder = true
-        invok.args[idx] = @cont
+        @call.args[idx] = cont
 
-    # TODO: if invok takes an optional callback, we can eliminate this
+    # TODO: if @call takes an optional callback, we can eliminate this
     # step if body is empty
     unless hasPlaceholder
-      invok.args.push @cont
-
-    @call = invok
-
-  # children: ['call', 'cont']
+      @call.args.push cont
+    @_prepared = true
 
   compileNode: (o) ->
+    @_prepareCall() unless @_prepared
     return @call.compileNode o
+
+  makeReturn: (res) ->
+    @_prepareCall() unless @_prepared
+    return @call.makeReturn res
 
 
 #### Param
