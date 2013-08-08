@@ -101,6 +101,7 @@ grammar =
   # Pure statements which cannot be expressions.
   Statement: [
     o 'Return'
+    o 'Callback'
     o 'Comment'
     o 'STATEMENT',                              -> new Literal $1
   ]
@@ -177,6 +178,13 @@ grammar =
     o 'Identifier'
     o 'AlphaNumeric'
     o 'ThisProperty'
+  ]
+
+  # A callback statement from an async function body.
+  Callback: [
+    # TODO: eventually also accept CALLBACK by itself,
+    # probably by modifying the rewriter
+    o 'CALLBACK Arguments',                      -> new Callback $2
   ]
 
   # A return statement from a function body.
@@ -637,6 +645,7 @@ operators = [
   ['right',     'FORIN', 'FOROF', 'BY', 'WHEN']
   ['right',     'IF', 'ELSE', 'FOR', 'WHILE', 'UNTIL', 'LOOP', 'SUPER', 'CLASS']
   ['right',     'POST_IF']
+  ['right',     'CALLBACK']
 ]
 
 # Wrapping Up
