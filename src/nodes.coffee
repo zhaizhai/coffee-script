@@ -271,12 +271,13 @@ exports.Block = class Block extends Base
 
     if not @async
       if len >= 0
-        @expressions[len] = expr.makeReturn res
+        @expressions[len] = expr.makeReturn res unless expr instanceof Callback
         emptyReturn = expr instanceof Return and not expr.expression
         @expressions.splice(len, 1) if emptyReturn
       return this
-
-    if len < 0 or expr not instanceof Callback
+    if expr instanceof BackCall
+      @expressions[len] = new Return expr
+    else if len < 0 or expr not instanceof Callback
       @expressions.push (new Callback [])
     return this
 
@@ -293,9 +294,9 @@ exports.Block = class Block extends Base
     compiledNodes = []
 
     for node, index in @expressions
-
       node = node.unwrapAll()
       node = (node.unfoldSoak(o) or node)
+
       if node instanceof Block
         # This is a nested block. We don't do anything special here like enclose
         # it in a new scope; we just compile the statements in this block along with
@@ -470,6 +471,8 @@ exports.Callback = class Callback extends Base
     call = call.makeReturn()
     return call.compileToFragments o
 
+  toString: (idt) ->
+    super idt, @constructor.name + ' ' + @args.toString()
 
 #### Return
 
@@ -493,6 +496,8 @@ exports.Return = class Return extends Base
     answer = []
     # TODO: If we call expression.compile() here twice, we'll sometimes get back different results!
     answer.push @makeCode @tab + "return#{if @expression or @async then " " else ""}"
+#    if @async
+#      answer = answer.push (@makeCode '__cb')
     if @expression
       answer = answer.concat @expression.compileToFragments o, LEVEL_PAREN
     answer.push @makeCode ";"
@@ -632,6 +637,9 @@ exports.Call = class Call extends Base
     else
       @isNew = true
     this
+
+  makeReturn: (o) ->
+    return super.makeReturn o
 
   # Grab the reference to the superclass's implementation of the current
   # method.
@@ -1440,11 +1448,16 @@ exports.Backcall = class Backcall extends Base
 
     @call = invok
 
-  # children: ['call', 'cont']
+  children: ['call']
 
   compileNode: (o) ->
     return @call.compileToFragments o
 
+  makeReturn: (res) ->
+    return @call.makeReturn res
+
+  # toString: (idt) ->
+  #   super idt, @constructor.name + ' ' + @call + ' ' + @cont
 
 #### Param
 
