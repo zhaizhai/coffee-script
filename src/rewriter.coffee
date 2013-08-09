@@ -363,7 +363,7 @@ class exports.Rewriter
     condition = (token, i) ->
       token[1] isnt ';' and token[0] in SINGLE_CLOSERS and
       not (token[0] is 'ELSE' and starter isnt 'THEN') and
-      not (token[0] in ['CATCH', 'FINALLY'] and starter in ['->', '=>'])
+      not (token[0] in ['CATCH', 'FINALLY'] and starter in ['->', '=>', '~>'])
 
     action = (token, i) ->
       @tokens.splice (if @tag(i - 1) is ',' then i - 1 else i), 0, outdent
@@ -461,7 +461,7 @@ IMPLICIT_FUNC    = ['IDENTIFIER', 'SUPER', ')', 'CALL_END', ']', 'INDEX_END', '@
 IMPLICIT_CALL    = [
   'IDENTIFIER', 'NUMBER', 'STRING', 'JS', 'REGEX', 'NEW', 'PARAM_START', 'CLASS'
   'IF', 'TRY', 'SWITCH', 'THIS', 'BOOL', 'NULL', 'UNDEFINED', 'UNARY', 'SUPER'
-  'THROW', '@', '->', '=>', '[', '(', '{', '--', '++', 'PLACEHOLDER'
+  'THROW', '@', '->', '=>', '~>', '[', '(', '{', '--', '++', 'PLACEHOLDER'
 ]
 
 IMPLICIT_UNSPACED_CALL = ['+', '-']
@@ -472,7 +472,7 @@ IMPLICIT_END     = ['POST_IF', 'FOR', 'WHILE', 'UNTIL', 'WHEN', 'BY',
 
 # Single-line flavors of block expressions that have unclosed endings.
 # The grammar can't disambiguate them, so we insert the implicit indentation.
-SINGLE_LINERS    = ['ELSE', '->', '=>', 'TRY', 'FINALLY', 'THEN']
+SINGLE_LINERS    = ['ELSE', '->', '=>', '~>', 'TRY', 'FINALLY', 'THEN']
 SINGLE_CLOSERS   = ['TERMINATOR', 'CATCH', 'FINALLY', 'ELSE', 'OUTDENT', 'LEADING_WHEN']
 
 # Tokens that end a line.

@@ -184,7 +184,7 @@ grammar =
   Callback: [
     # TODO: eventually also accept CALLBACK by itself,
     # probably by modifying the rewriter
-    o 'CALLBACK Arguments',                      -> new Callback $2
+    o 'CALLBACK Arguments',                      -> new Call (new Literal '__cb'), $2
   ]
 
   # A return statement from a function body.

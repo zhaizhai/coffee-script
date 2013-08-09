@@ -193,7 +193,7 @@ exports.Base = class Base
     [].concat @makeCode('('), fragments, @makeCode(')')
 
   # `fragmentsList` is an array of arrays of fragments. Each array in fragmentsList will be
-  # concatonated together, with `joinStr` added in between each, to produce a final flat array
+  # concatenated together, with `joinStr` added in between each, to produce a final flat array
   # of fragments.
   joinFragmentArrays: (fragmentsList, joinStr) ->
     answer = []
@@ -208,9 +208,17 @@ exports.Base = class Base
 # indented block of code -- the implementation of a function, a clause in an
 # `if`, `switch`, or `try`, and so on...
 exports.Block = class Block extends Base
-  constructor: (nodes, tag) ->
+  constructor: (nodes) ->
     @expressions = compact flatten nodes or []
-    @async       = tag is 'async'
+
+    @hasBackcall = false
+    for node in @expressions
+      if node instanceof Backcall or node.hasBackcall
+        # TODO: node.hasBackcall only applies to If nodes for now
+        @hasBackcall = true
+        break
+
+    @_madeContinuation = false
 
     # TODO: should we allow returns inside async functions?
     # if @async
@@ -221,11 +229,6 @@ exports.Block = class Block extends Base
     #     throwSyntaxError "Can't return inside async function!", @locationData
 
   children: ['expressions']
-
-  # Set Block to be async
-  setAsync: ->
-    @async = true
-    this
 
   # Tack an expression on to the end of this expression list.
   push: (node) ->
@@ -259,35 +262,54 @@ exports.Block = class Block extends Base
     for exp in @expressions
       return exp if exp.jumps o
 
-  # A Block node does not return its entire body, rather it
-  # ensures that the final expression is returned.
-  makeReturn: (res) ->
+  makeContinuation: (contCall) ->
     len = @expressions.length - 1
     while len >= 0 and (@expressions[len] instanceof Comment)
       len--
-
     expr = if len >= 0 then @expressions[len] else null
 
-    if not @async
-      if len >= 0
-        if expr instanceof Callback
-          throwSyntaxError "Callback allowed only in async blocks!", @locationData
-        @expressions[len] = expr.makeReturn res
-        emptyReturn = expr instanceof Return and not expr.expression
-        @expressions.splice(len, 1) if emptyReturn
-      return this
+    @_madeContinuation = true
+    if len >= 0
+      if (expr instanceof If and expr.continuation) or expr instanceof Backcall
+        return this
+      # this prevents duplication of explicit and implicit `callback`s
+      if (expr instanceof Call and expr.variable?.value is contCall.variable.value)
+        return this
+    @expressions.push contCall.makeReturn()
+    return this
 
-    if expr instanceof Backcall
-      expr.body.setAsync()
-      expr = expr.makeReturn res
-      @expressions[len] = expr
-    else if len < 0 or expr not instanceof Callback
-      @expressions.push (new Callback [])
+  # A Block node does not return its entire body, rather it
+  # ensures that the final expression is returned.
+  makeReturn: (res) ->
+    return this if @_madeContinuation
+
+    len = @expressions.length - 1
+    while len >= 0 and (@expressions[len] instanceof Comment)
+      len--
+    expr = if len >= 0 then @expressions[len] else null
+
+    if len >= 0
+      if expr instanceof Call and expr.variable?.value is '__cb'
+        throwSyntaxError "Callback allowed only in async blocks!", @locationData
+      @expressions[len] = expr.makeReturn res
+      emptyReturn = expr instanceof Return and not expr.expression
+      @expressions.splice(len, 1) if emptyReturn
     return this
 
   # A **Block** is the only node that can serve as the root.
   compileToFragments: (o = {}, level) ->
     if o.scope then super o, level else @compileRoot o
+
+  foldBackcalledIfs: ->
+    for node, index in @expressions
+      node = node.unwrapAll()
+      if node instanceof If and node.hasBackcall
+        rest = @expressions.splice (index + 1),
+          (@expressions.length - index - 1)
+        # TODO: test if rest is empty
+        rest = new Block rest
+        node.continuation = rest
+        return
 
   # Compile all expressions within the **Block** body. If we need to
   # return the result, and it's an expression, simply return it. If it's a
@@ -297,11 +319,25 @@ exports.Block = class Block extends Base
     top   = o.level is LEVEL_TOP
     compiledNodes = []
 
+    # TODO: refactor this so that there's more symmetry between
+    # makeReturn and makeContinuation
+    @foldBackcalledIfs()
+    contCall = del o, 'continuationCall'
+    @makeContinuation contCall if contCall
+
     for node, index in @expressions
       node = node.unwrapAll()
       node = (node.unfoldSoak(o) or node)
 
-      if node instanceof Block
+      if (node instanceof If and node.continuation) or node instanceof Backcall
+        # pass along the continuation
+        # TODO: how does this interact with the if top case?
+        fragments = node.compileToFragments (merge o, {continuationCall: contCall})
+        # these are always expressions
+        fragments.unshift @makeCode "#{@tab}return "
+        fragments.push @makeCode ";"
+        compiledNodes.push fragments
+      else if node instanceof Block
         # This is a nested block. We don't do anything special here like enclose
         # it in a new scope; we just compile the statements in this block along with
         # our own
@@ -315,6 +351,7 @@ exports.Block = class Block extends Base
         compiledNodes.push fragments
       else
         compiledNodes.push node.compileToFragments o, LEVEL_LIST
+
     if top
       if @spaced
         return [].concat @joinFragmentArrays(compiledNodes, '\n\n'), @makeCode("\n")
@@ -387,9 +424,9 @@ exports.Block = class Block extends Base
 
   # Wrap up the given nodes as a **Block**, unless it already happens
   # to be one.
-  @wrap: (nodes, tag = '') ->
+  @wrap: (nodes) ->
     return nodes[0] if nodes.length is 1 and nodes[0] instanceof Block
-    new Block nodes, tag
+    new Block nodes
 
 #### Literal
 
@@ -446,37 +483,6 @@ class exports.Bool extends Base
   isComplex: NO
   compileNode: -> [@makeCode @val]
   constructor: (@val) ->
-
-#### Callback
-
-# Like `return`, a `callback` is a *pureStatement*.
-
-exports.Callback = class Callback extends Base
-  constructor: (@args = []) ->
-    # TODO: eventually might want to generate this dynamically instead
-    # of reserving the word __cb
-    @cbName = '__cb'
-
-  isStatement: YES
-
-  setCbName: (@cbName) ->
-    # TODO: we don't use this yet
-
-  makeReturn: (res) ->
-    # TODO: use a more helpful error message
-    throwSyntaxError "Cannot make return from callback", @locationData
-
-  compileNode: (o) ->
-    unless @cbName?
-      throwSyntaxError "Callback used outside of async context!", @locationData
-
-    cbValue = new Value (new Literal @cbName)
-    call = new Call cbValue, @args
-    call = call.makeReturn()
-    return call.compileToFragments o
-
-  toString: (idt) ->
-    super idt, @constructor.name + ' ' + @args.toString()
 
 #### Return
 
@@ -1335,8 +1341,9 @@ exports.Code = class Code extends Base
     @bound   = tag is 'boundfunc'
     @context = '_this' if @bound
     @async   = tag is 'async'
-    @params.push (new Param (new Literal "__cb")) if @async
-    @body.setAsync() if @async
+
+    if @async
+      @params.push (new Param (new Literal "__cb"))
 
   children: ['params', 'body']
 
@@ -1355,6 +1362,7 @@ exports.Code = class Code extends Base
     o.indent        += TAB
     delete o.bare
     delete o.isExistentialEquals
+
     params = []
     exprs  = []
     @eachParamName (name) -> # this step must be performed before the others
@@ -1389,11 +1397,6 @@ exports.Code = class Code extends Base
       node.error "multiple parameters named '#{name}'" if name in uniqs
       uniqs.push name
 
-    unless (wasEmpty or @noReturn) and not @body.async
-      # TODO: we should pass async-ness through o
-      # @body may be async without the code itself being async, if the
-      # code is the continuation of a backcall
-      @body.makeReturn()
     if @bound
       if o.scope.parent.method?.bound
         @bound = @context = o.scope.parent.method.context
@@ -1408,7 +1411,13 @@ exports.Code = class Code extends Base
       if i then answer.push @makeCode ", "
       answer.push p...
     answer.push @makeCode ') {'
-    answer = answer.concat(@makeCode("\n"), @body.compileWithDeclarations(o), @makeCode("\n#{@tab}")) unless @body.isEmpty()
+
+    if @async
+      o.continuationCall = new Call (new Literal '__cb'), []
+    unless wasEmpty or @noReturn or o.continuationCall
+      @body.makeReturn()
+    unless @body.isEmpty() and not o.continuationCall
+      answer = answer.concat(@makeCode("\n"), @body.compileWithDeclarations(o), @makeCode("\n#{@tab}"))
     answer.push @makeCode '}'
 
     return [@makeCode(@tab), answer...] if @ctor
@@ -1457,6 +1466,7 @@ exports.Backcall = class Backcall extends Base
 
   compileNode: (o) ->
     @_prepareCall() unless @_prepared
+    o.sharedScope = yes
     return @call.compileNode o
 
   makeReturn: (res) ->
@@ -2103,6 +2113,9 @@ exports.If = class If extends Base
     @isChain   = false
     {@soak}    = options
 
+    @continuation = null
+    @hasBackcall = @body.hasBackcall
+
   children: ['condition', 'body', 'elseBody']
 
   bodyNode:     -> @body?.unwrap()
@@ -2110,6 +2123,11 @@ exports.If = class If extends Base
 
   # Rewrite a chain of **Ifs** to add a default case as the final *else*.
   addElse: (elseBody) ->
+    if elseBody instanceof Block
+      @hasBackcall or= elseBody.hasBackcall
+    else if elseBody instanceof If
+      @hasBackcall or= elseBody.body.hasBackcall
+
     if @isChain
       @elseBodyNode().addElse elseBody
     else
@@ -2121,15 +2139,26 @@ exports.If = class If extends Base
   # The **If** only compiles into a statement if either of its bodies needs
   # to be a statement. Otherwise a conditional operator is safe.
   isStatement: (o) ->
+    return false if @continuation
     o?.level is LEVEL_TOP or
       @bodyNode().isStatement(o) or @elseBodyNode()?.isStatement(o)
 
   jumps: (o) -> @body.jumps(o) or @elseBody?.jumps(o)
 
   compileNode: (o) ->
-    if @isStatement o then @compileStatement o else @compileExpression o
+    unless @continuation or @isStatement o
+      return @compileExpression o
+
+    exeq = del o, 'isExistentialEquals'
+    if exeq
+      return new If(@condition.invert(), @elseBodyNode(), type: 'if').compileToFragments o
+
+    if @continuation
+      return @compileWithContinuation o
+    return @compileStatement o
 
   makeReturn: (res) ->
+    # TODO: perhaps handle continuation case
     @elseBody  or= new Block [new Literal 'void 0'] if res
     @body     and= new Block [@body.makeReturn res]
     @elseBody and= new Block [@elseBody.makeReturn res]
@@ -2138,15 +2167,37 @@ exports.If = class If extends Base
   ensureBlock: (node) ->
     if node instanceof Block then node else new Block [node]
 
+  compileWithContinuation: (o) ->
+    if o.chainChild
+      throwSyntaxError "IF block with continuation cannot be chain child!", @locationData
+    indent = o.indent + TAB
+    innerContCall = new Call (new Literal '__cont'), []
+    continuation = @continuation
+
+    # TODO: we need to use boundfuncs!
+    answer = [@makeCode "(function(__cont) {\n"]
+    innerContext =
+      indent: indent
+      # this might override an existing continuationCall
+      continuationCall: innerContCall
+    # compile as a normal If
+    @tab = indent
+    if not @elseBodyNode()
+      # TODO: we can be less verbose by simply putting "return
+      # __cont();", but it relies on the if block returning
+      @addElse (new Block)
+    answer = answer.concat @compileStatement merge o, innerContext
+
+    answer.push @makeCode("\n#{o.indent}})(function() {\n")
+    contFrags = continuation.compileToFragments merge o, {indent}
+    answer = answer.concat contFrags
+    answer.push @makeCode("\n#{o.indent}})")
+    answer
+
   # Compile the `If` as a regular *if-else* statement. Flattened chains
   # force inner *else* bodies into statement form.
   compileStatement: (o) ->
     child    = del o, 'chainChild'
-    exeq     = del o, 'isExistentialEquals'
-
-    if exeq
-      return new If(@condition.invert(), @elseBodyNode(), type: 'if').compileToFragments o
-
     indent   = o.indent + TAB
     cond     = @condition.compileToFragments o, LEVEL_PAREN
     body     = @ensureBlock(@body).compileToFragments merge o, {indent}
