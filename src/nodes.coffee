@@ -1466,7 +1466,7 @@ exports.Backcall = class Backcall extends Base
 
   compileNode: (o) ->
     @_prepareCall() unless @_prepared
-    o.sharedScope = yes
+    o = merge o, {sharedScope: yes}
     return @call.compileNode o
 
   makeReturn: (res) ->
@@ -2174,12 +2174,19 @@ exports.If = class If extends Base
     innerContCall = new Call (new Literal '__cont'), []
     continuation = @continuation
 
-    # TODO: we need to use boundfuncs!
     answer = [@makeCode "(function(__cont) {\n"]
+    # bind the context
+    unless o.scope.method?.bound
+      # TODO: temporary hack for doing binding correctly
+      o.scope.method ?= {} # add faux method if there is none
+      o.scope.method.bound = yes
+      o.scope.method.context = '_this'
+      o.scope.assign '_this', 'this'
     innerContext =
       indent: indent
       # this might override an existing continuationCall
       continuationCall: innerContCall
+
     # compile as a normal If
     @tab = indent
     if not @elseBodyNode()
